@@ -1,10 +1,10 @@
 import gradio as gr
 import openai
 import config
-from playsound import playsound
+import pyaudio
 
 openai.api_key =  config.OPENAI_API_KEY
-speech_file = "french.mp3"
+p = pyaudio.PyAudio()
 
 messages=[
         {"role": "system", "content": "You are a hotel receptionist, your job is to help customers check in to their room. \
@@ -39,17 +39,25 @@ def transcribe(audio):
                 }
         ] )
         
-    # step 4 - save the French text as an audio file
+    # step 4 - play the French response
+    stream = p.open(format=8,
+                channels=1,
+                rate=24_000,
+                output=True)
+
     with openai.audio.speech.with_streaming_response.create(
         model="tts-1",
-        voice="nova",
-        input=response3.choices[0].message.content
+        voice="alloy",
+        input=response3.choices[0].message.content,
+        response_format="pcm"
     ) as response:
-        response.stream_to_file(speech_file)
+         for chunk in response.iter_bytes(1024):
+                stream.write(chunk)
 
-    # step 5 - play the audio file
+    p.close(stream)
+
+    # step 5 - display the response
     chat = response3.choices[0].message.content
-    playsound(speech_file)
     return chat
 
 gr.Interface(
