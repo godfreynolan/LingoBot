@@ -2,17 +2,20 @@ import gradio as gr
 import openai
 import config
 import pyaudio
+import re
 
 openai.api_key =  config.OPENAI_API_KEY
 p = pyaudio.PyAudio()
+pattern = re.compile("[a-zA-Z]")
 
-messages=[
+msgs=[
         {"role": "system", "content": "You are a hotel receptionist, your job is to help customers check in to their room. \
         You can only respond when a customer asks you a question. Do not start the conversation wait for a question.\
         The customer does not speak your language, so keep your responses simple and clear."},
     ]
 def transcribe(audio):
-    global messages
+    global msgs
+
     media_file = open(audio, "rb")
 
     # Step 1 - read in the French audio and convert it into English
@@ -20,46 +23,53 @@ def transcribe(audio):
         model="whisper-1",
         file=media_file,
     )    
-    messages.append({"role": "user", "content": translation.text})
+    msgs.append({"role": "user", "content": translation.text})
+    if(pattern.search(translation.text)):
+        print(translation.text)
 
-    # Step 2 - use the English text to generate a response
-    response2 = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=messages
-    )
-    messages.append({"role": "assistant", "content": response2.choices[0].message.content})
+        # Step 2 - use the English text to generate a response
+        response2 = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=msgs
+        )
+        msgs.append({"role": "assistant", "content": response2.choices[0].message.content})
+        print("step2: ", msgs)
 
-   # Step 3 - convert the response into French text
-    response3 = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-                {
-                    "role": "user",
-                    "content": "Translate the following text into French: " + response2.choices[0].message.content
-                }
-        ] )
+    # Step 3 - convert the response into French text
+        response3 = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                    {
+                        "role": "user",
+                        "content": "Translate the following text into French: " + response2.choices[0].message.content
+                    }
+            ] )
+        print("step3: ", msgs)
         
-    # step 4 - play the French response
-    stream = p.open(format=8,
-                channels=1,
-                rate=24_000,
-                output=True)
+        # step 4 - convert the french text to audio and stream the response
+        stream = p.open(format=8,
+                    channels=1,
+                    rate=24_000,
+                    output=True)
 
-    with openai.audio.speech.with_streaming_response.create(
-        model="tts-1",
-        voice="alloy",
-        input=response3.choices[0].message.content,
-        response_format="pcm"
-    ) as response:
-         for chunk in response.iter_bytes(1024):
-                stream.write(chunk)
+        with openai.audio.speech.with_streaming_response.create(
+            model="tts-1",
+            voice="alloy",
+            input=response3.choices[0].message.content,
+            response_format="pcm"
+        ) as response:
+            for chunk in response.iter_bytes(1024):
+                    stream.write(chunk)
 
-    p.close(stream)
+        p.close(stream)
 
-    # step 5 - display the response
-    chat = response3.choices[0].message.content
+        # step 5 - update the text on the screen
+        chat = response3.choices[0].message.content
+    else:
+        chat = ''
     return chat
 
+# use gradio to create a simple interface 
 gr.Interface(
     fn=transcribe,
     live=True,
