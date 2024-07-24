@@ -2,15 +2,13 @@ import gradio as gr
 import openai
 import config
 import pyaudio
-import re
 
 openai.api_key =  config.OPENAI_API_KEY
 p = pyaudio.PyAudio()
-pattern = re.compile("[a-zA-Z]")
 
 msgs=[
         {"role": "system", "content": "You are a hotel receptionist, your job is to help customers check in to their room. \
-        You can only respond when a customer asks you a question. Do not start the conversation wait for a question.\
+        You can only respond when a customer asks you a question. Do not start the conversation. Always wait for a question.\
         The customer does not speak your language, so keep your responses simple and clear."},
     ]
 def transcribe(audio):
@@ -24,7 +22,7 @@ def transcribe(audio):
         file=media_file,
     )    
     msgs.append({"role": "user", "content": translation.text})
-    if(pattern.search(translation.text)):
+    if(len(translation.text)>10):
         print(translation.text)
 
         # Step 2 - use the English text to generate a response
@@ -35,7 +33,7 @@ def transcribe(audio):
         msgs.append({"role": "assistant", "content": response2.choices[0].message.content})
         print("step2: ", msgs)
 
-    # Step 3 - convert the response into French text
+        # Step 3 - convert the response into French text
         response3 = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
